@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
   PyHeapTypeObject etp_base;
   Py_ssize_t etp_count; /* length of tpe_entries array */
-  PyExtensibleTypeObjectEntry *etp_custom_slots;
+  PyExtensibleTypeObjectEntry etp_custom_slots[4];
 } PyHeapExtensibleTypeObject;
 
 
@@ -54,18 +54,18 @@ static void *PyCustomSlots_Find(PyObject *obj,
   /* We unroll and make hitting the first slot likely(); this saved
      about 2 cycles on the test system with gcc 4.6.3, -O2 */
   if (likely(PyCustomSlots_Check(obj))) {
-    if (likely(PyCustomSlots_Count(obj) > 0)) {
+    //if (likely(PyCustomSlots_Count(obj) > 0)) {
       entries = PyCustomSlots_Table(obj);
       if (likely((entries[0].id & mask) == id)) {
         return entries[0].data;
       } else {
-        for (i = 1; i != PyCustomSlots_Count(obj); ++i) {
+        for (i = 1; i != 4; ++i) {
           if ((entries[i].id & mask) == id) {
             return entries[i].data;
           }
         }
       }
-    }
+      //}
   }
   return 0;
 }
@@ -83,7 +83,8 @@ static PyObject *_PyExtensibleType_new(PyTypeObject *t, PyObject *a, PyObject *k
   new_type = (PyHeapExtensibleTypeObject*)o;
   base_type = (PyHeapExtensibleTypeObject*)((PyTypeObject*)o)->tp_base;
   new_type->etp_count = base_type->etp_count;
-  new_type->etp_custom_slots = base_type->etp_custom_slots;
+  memcpy(new_type->etp_custom_slots, base_type->etp_custom_slots,
+         sizeof(base_type->etp_custom_slots));
   return o;
 }
 

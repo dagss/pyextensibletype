@@ -97,7 +97,10 @@ int ProviderType_Ready(void) {
   if (!extensibletype) return -1;
   ((PyObject*)&Provider_Type)->ob_type = extensibletype;
   Provider_Type.etp_count = 1;
-  Provider_Type.etp_custom_slots = my_custom_slots;
+  Provider_Type.etp_custom_slots[0].id = EXTENSIBLETYPE_DOUBLE_FUNC_SLOT;
+// = my_custom_slots;
+  Provider_Type.etp_custom_slots[0].data = &func;
+  //  {, func}
 
   if (PyType_Ready((PyTypeObject*)&Provider_Type) < 0) {
     return -1;
