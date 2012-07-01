@@ -2,35 +2,17 @@
 #include <stdlib.h>
 
 typedef struct {
-  char *id;
-  uintptr_t flags;
-  void *ptr;
-} PyCustomSlots_Entry;
+  uint64_t hash;
+  uint32_t key_length; /* length of key */
+  char *key_data;
+} lookup_table_key_t;
 
 typedef struct {
-  uint64_t flags;
-  uint64_t m_f, m_g;
-  PyCustomSlots_Entry *entries;
-  uint16_t n, b;
+  uint16_t entry_count, slot_count, bin_count, m_f, m_g;
   uint8_t r;
-  uint8_t reserved;
-
-  /* Trailing variable-size:
+  uint8_t flags;
   uint16_t d[0];
-  PyCustomSlots_Entry entries_mem[n];
-  */
-} PyCustomSlots_Table;
-
-typedef struct {
-  PyCustomSlots_Table base;
-  uint16_t d[64];
-  PyCustomSlots_Entry entries_mem[64];
-} PyCustomSlots_Table_64_64;
-
-
-
-/*void PyCustomSlots_bucket_argsort(uint16_t p, uint16_t) {
-  }*/
+} lookup_table_header_t;
 
 
 uint64_t PyCustomSlots_roundup_2pow(uint64_t x) {
@@ -62,14 +44,13 @@ void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
   }
 }
 
-int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
+int _PyCustomSlots_FindDisplacements(lookup_table_header_t *table,
                                      uint64_t *hashes,
                                      uint8_t *binsizes,
                                      uint16_t *bins,
                                      uint16_t *p,
-                                     uint8_t *taken,
-                                     PyCustomSlots_Entry *entries_copy) {
-  uint16_t *d = (void*)((char*)table + sizeof(PyCustomSlots_Table));
+                                     uint8_t *taken) {
+  uint16_t *d = &table->d[0];
   uint16_t nbins = table->b;
   uint64_t m_f = table->m_f;
   uint8_t r = table->r;
@@ -133,33 +114,40 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
   return 0;
 }
 
-int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
+int PyCustomSlots_PerfectHash(lookup_table_header_t *table,
+                              uint16_t entry_count,
+                              uint16_t slot_count,
+                              uint16_t bin_count,
+                              uint64_t *hashes,
+                              uint16_t *out_permutation) {
   uint16_t bin, j;
   uint8_t binsize;
-  uint16_t i, n = table->n, b = table->b;
-  uint64_t m_f = PyCustomSlots_roundup_2pow(table->n) - 1;
-  uint64_t m_g = (b - 1) & 0xffff;
-  uint16_t *bins = malloc(sizeof(uint16_t) * b * BIN_LIMIT);
-  uint8_t *binsizes = malloc(sizeof(uint8_t) * b);
-  uint16_t *p = malloc(sizeof(uint16_t) * b);
-  uint8_t *taken = malloc(sizeof(uint8_t) * n);
+  uint16_t i;
+  uint16_t m_f = n - 1;
+  uint16_t m_g = b - 1;
+  uint16_t *bins = malloc(sizeof(uint16_t) * bin_count * BIN_LIMIT);
+  uint8_t *binsizes = malloc(sizeof(uint8_t) * bin_count);
+  uint16_t *p = malloc(sizeof(uint16_t) * bin_count);
+  uint8_t *taken = malloc(sizeof(uint8_t) * slot_count);
   uint8_t number_of_bins_by_size[BIN_LIMIT];
-  PyCustomSlots_Entry *entries_copy = malloc(sizeof(PyCustomSlots_Entry) * n);
 
-  for (i = 0; i != n; ++i) {
-    entries_copy[i] = table->entries[i];
-  }
+  table->entry_count = entry_count;
+  table->bin_count = bin_count;
+  table->slot_count = slot_count;
+  table->m_f = m_f;
+  table->m_g = m_g;
   
+
   /* Bin the n hashes into b bins based on the g hash. Also count the
      number of bins of each size. */
-  for (bin = 0; bin != b; ++bin) {
+  for (bin = 0; bin != bin_count; ++bin) {
     binsizes[bin] = 0;
   }
-  number_of_bins_by_size[0] = b;
+  number_of_bins_by_size[0] = bin_count;
   for (binsize = 1; binsize != BIN_LIMIT; ++binsize) {
     number_of_bins_by_size[binsize] = 0;
   }
-  for (i = 0; i != n; ++i) {
+  for (i = 0; i != slot_count; ++i) {
     bin = hashes[i] & m_g;
     binsize = ++binsizes[bin];
     if (binsize == BIN_LIMIT) {

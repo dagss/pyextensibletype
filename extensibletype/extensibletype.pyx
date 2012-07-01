@@ -81,6 +81,15 @@ cdef extern from "md5sum.h":
 cdef extern from "hash.h":
     uint64_t hash_crapwow64(unsigned char *buf, uint64_t len, uint64_t seed)
 
+cdef extern from "sph_md5.h":
+    ctypedef struct sph_md5_context:
+        pass
+    void sph_md5_init(void *cc)
+    void sph_md5(void *cc, void *data, size_t len)
+    void sph_md5_close(void *cc, void *dst)
+
+    
+
 def crapwowbench(int repeat=1):
     cdef int r
     cdef MD5_CTX ctx
@@ -96,3 +105,13 @@ def md5bench(int repeat=1):
         MD5Update(&ctx, "asdf", 4)
         MD5Final(&ctx)
 
+
+def md5bench2(int repeat=1):
+    cdef sph_md5_context ctx
+    cdef char out[16]
+    for r in range(repeat):
+        sph_md5_init(&ctx)
+        sph_md5(&ctx, "asdf", 4)
+        sph_md5_close(&ctx, out)
+
+        

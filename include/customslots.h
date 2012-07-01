@@ -31,8 +31,24 @@ MSVC: http://msinttypes.googlecode.com/svn/trunk/stdint.h
   #define PY_CUSTOMSLOTS_INLINE
 #endif
 
-
 #define PyExtensibleType_TPFLAGS_IS_EXTENSIBLE (1L<<22)
+
+
+
+typedef struct {
+  lookup_table_key_t *interned_key;
+  uintptr_t flags;
+  union {
+    Py_ssize_t offset;
+    void *pointer;
+  } data;
+} PyCustomSlot;
+
+#define PY_CUSTOM_SLOT_TABLE_TYPE(n) struct {\
+  PyCustomSlot slots[n]; \
+  lookup_table_header_t header; \
+  uint16_t _d_mem[n]; \
+}
 
 typedef struct {
   uintptr_t id;
