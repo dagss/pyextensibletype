@@ -1,3 +1,5 @@
+from libc.stdlib cimport malloc, free
+
 cimport numpy as cnp
 import numpy as np
 
@@ -9,27 +11,24 @@ cdef extern from "stdint.h":
     ctypedef uint64_t uintptr_t
 
 cdef extern from "perfecthash.h":
-    ctypedef struct PyCustomSlots_Entry:
-        char *id
-        uintptr_t flags
-        void *ptr
 
-    ctypedef struct PyCustomSlots_Table:
-        uint64_t flags
-        uint64_t m_f, m_g
-        PyCustomSlots_Entry *entries
-        uint16_t n, b
+    ctypedef struct lookup_table_header_t:
+        uint16_t entry_count, slot_count, bin_count, m_f, m_g
         uint8_t r
+        uint8_t flags
+        uint16_t d[0]
 
-    ctypedef struct PyCustomSlots_Table_64_64:
-        PyCustomSlots_Table base
-        uint16_t d[64]
-        PyCustomSlots_Entry entries_mem[64]
-        
+    int PyCustomSlots_PerfectHash(lookup_table_header_t *table,
+                                  uint16_t entry_count,
+                                  uint16_t slot_count,
+                                  uint16_t bin_count,
+                                  uint64_t *hashes,
+                                  uint16_t *out_permutation)
 
-    int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes)
     void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
                                        uint8_t *number_of_bins_by_size)
+
+    uint64_t PyCustomSlots_roundup_2pow(uint64_t x)
 
 def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
                    cnp.ndarray[uint8_t, mode='c'] binsizes,
@@ -37,34 +36,41 @@ def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
     _PyCustomSlots_bucket_argsort(&p[0], &binsizes[0],
                                   &number_of_bins_by_size[0])
 
-def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1):
+
+def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1,
+                 int slot_count=-1, int bin_count=-1):
     """Used for testing. Takes the hashes as input, and returns
        a permutation array and hash parameters:
 
        (p, r, m_f, m_g, d)
     """
-    cdef PyCustomSlots_Table_64_64 table
-    table.base.flags = 0
-    table.base.n = 64
-    table.base.b = 64
-    table.base.entries = &table.entries_mem[0]
-    for i in range(64):
-        table.entries_mem[i].id = NULL
-        table.entries_mem[i].flags = i
-        table.entries_mem[i].ptr = NULL
+    if slot_count == -1:
+        slot_count = PyCustomSlots_roundup_2pow(len(hashes))
+    if bin_count == -1:
+        bin_count = slot_count
+    
 
+    #print len(hashes), slot_count, bin_count
+    
+    cdef cnp.ndarray[uint16_t] out = np.zeros(slot_count, np.uint16)
+    cdef cnp.ndarray[uint16_t] d = np.zeros(bin_count, np.uint16)
+    cdef lookup_table_header_t *table = <lookup_table_header_t*>(
+        malloc(sizeof(lookup_table_header_t)
+               + sizeof(uint16_t) * slot_count))
     cdef int r
     for r in range(repeat):
-        PyCustomSlots_PerfectHash(&table.base, &hashes[0])
+        retcode = PyCustomSlots_PerfectHash(table, len(hashes), slot_count, bin_count,
+                                            &hashes[0], &out[0])
+    if retcode != 0:
+        raise RuntimeError("No perfect hash found")
 
-    d = np.zeros(64, dtype=np.uint16)
-    p = np.zeros(64, dtype=np.uint16)
-
-    for i in range(64):
-        p[i] = table.entries_mem[i].flags
+    cdef int i
+    for i in range(bin_count):
         d[i] = table.d[i]
 
-    return p, table.base.r, table.base.m_f, table.base.m_g, d
+    result = (out, table.r, table.m_f, table.m_g, d)
+    free(table)
+    return result
 
 cdef extern from "md5sum.h":
     ctypedef struct MD5_CTX:

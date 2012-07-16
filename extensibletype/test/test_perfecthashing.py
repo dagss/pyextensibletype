@@ -1,6 +1,8 @@
 from nose.tools import eq_, ok_
 import numpy as np
 from .. import extensibletype
+from .common import *
+
 
 def draw_hashes(rng, nitems):
     hashes = rng.randint(2**32, size=nitems).astype(np.uint64)
@@ -32,7 +34,8 @@ def test_binsort():
 def test_basic():
     n=64
     prehashes = draw_hashes(np.random, n)
-    p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=10**6)
+    p, r, m_f, m_g, d = extensibletype.perfect_hash(prehashes, repeat=1)
+    print r
     hashes = ((prehashes >> r) & m_f) ^ d[prehashes & m_g]
     print p
     print d
