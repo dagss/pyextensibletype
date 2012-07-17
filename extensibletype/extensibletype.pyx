@@ -26,19 +26,21 @@ cdef extern from "perfecthash.h":
                                   uint16_t *out_permutation)
 
     void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
-                                       uint8_t *number_of_bins_by_size)
+                                       uint16_t *number_of_bins_by_size)
 
     uint64_t PyCustomSlots_roundup_2pow(uint64_t x)
 
 def bucket_argsort(cnp.ndarray[uint16_t, mode='c'] p,
                    cnp.ndarray[uint8_t, mode='c'] binsizes,
-                   cnp.ndarray[uint8_t, mode='c'] number_of_bins_by_size):
+                   cnp.ndarray[uint16_t, mode='c'] number_of_bins_by_size):
     _PyCustomSlots_bucket_argsort(&p[0], &binsizes[0],
                                   &number_of_bins_by_size[0])
 
+def roundup_2pow(i):
+    return PyCustomSlots_roundup_2pow(i)
 
-def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1,
-                 int slot_count=-1, int bin_count=-1):
+def perfect_hash(cnp.ndarray[uint64_t] hashes,
+                 int slot_count=-1, int bin_count=-1, int repeat=1):
     """Used for testing. Takes the hashes as input, and returns
        a permutation array and hash parameters:
 
@@ -48,15 +50,13 @@ def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1,
         slot_count = PyCustomSlots_roundup_2pow(len(hashes))
     if bin_count == -1:
         bin_count = slot_count
-    
-
-    #print len(hashes), slot_count, bin_count
+    if slot_count < len(hashes):
+        raise ValueError('slot_count < len(hashes)')
     
     cdef cnp.ndarray[uint16_t] out = np.zeros(slot_count, np.uint16)
-    cdef cnp.ndarray[uint16_t] d = np.zeros(bin_count, np.uint16)
     cdef lookup_table_header_t *table = <lookup_table_header_t*>(
         malloc(sizeof(lookup_table_header_t)
-               + sizeof(uint16_t) * slot_count))
+               + sizeof(uint16_t) * bin_count))
     cdef int r
     for r in range(repeat):
         retcode = PyCustomSlots_PerfectHash(table, len(hashes), slot_count, bin_count,
@@ -65,6 +65,7 @@ def perfect_hash(cnp.ndarray[uint64_t] hashes, int repeat=1,
         raise RuntimeError("No perfect hash found")
 
     cdef int i
+    cdef cnp.ndarray[uint16_t] d = np.zeros(bin_count, np.uint16)
     for i in range(bin_count):
         d[i] = table.d[i]
 

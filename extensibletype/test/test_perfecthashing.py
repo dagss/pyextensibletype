@@ -25,7 +25,7 @@ def test_binsort():
     nbins = 64
     p = np.zeros(nbins, dtype=np.uint16)
     binsizes = np.random.randint(0, 7, size=nbins).astype(np.uint8)
-    num_by_size = np.zeros(8, dtype=np.uint8)
+    num_by_size = np.zeros(12, dtype=np.uint16)
     x = np.bincount(binsizes).astype(np.uint8)
     num_by_size[:x.shape[0]] = x
     extensibletype.bucket_argsort(p, binsizes, num_by_size)
